@@ -4,7 +4,6 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import crypto from "crypto";
 import prisma from "@/lib/prisma";
-import { INITIAL_OCEAN_MESSAGES } from "@/lib/seed-data";
 import { RECIPIENT_ROLES, ALLOWED_TAG_COLORS } from "@/lib/constants";
 import { broadcastOceanEvent } from "@/lib/realtime";
 import {
@@ -18,6 +17,13 @@ const COOKIE_DAILY_VIEWS = "unsent_daily_views";
 const COOKIE_OWN_BOTTLES = "unsent_own_bottles";
 const MAX_DAILY_VIEWS = 3;
 const BOTTLE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours lifespan on the ocean
+
+const COOKIE_BASE_OPTIONS = {
+  httpOnly: true,
+  sameSite: "lax" as const,
+  secure: process.env.NODE_ENV === "production",
+  path: "/",
+};
 
 const MESSAGE_SELECT_FIELDS = {
   id: true,
@@ -86,50 +92,25 @@ function getCutoff24HoursAgo(): Date {
 }
 
 /**
- * Purges bottles older than 24 hours and ensures the SQLite database has floating bottles
+ * Purges expired bottles (> 24 hours old) and any legacy dev/seed messages without an AUTHOR interaction
  */
-async function ensureSeeded(): Promise<void> {
+async function purgeExpiredBottles(): Promise<void> {
   const cutoff24h = getCutoff24HoursAgo();
 
-  // Automatically remove expired bottles older than 24 hours
   await prisma.message.deleteMany({
     where: {
-      createdAt: { lt: cutoff24h },
+      OR: [
+        { createdAt: { lt: cutoff24h } },
+        {
+          interactions: {
+            none: {
+              type: "AUTHOR",
+            },
+          },
+        },
+      ],
     },
   });
-
-  const activeCount = await prisma.message.count({
-    where: {
-      isReported: false,
-      createdAt: { gte: cutoff24h },
-    },
-  });
-
-  if (activeCount > 0) {
-    await prisma.message.updateMany({
-      where: { recipientRole: "Bản thân năm 18 tuổi" },
-      data: { recipientRole: "Bản thân" },
-    });
-    return;
-  }
-
-  const now = Date.now();
-  for (const item of INITIAL_OCEAN_MESSAGES) {
-    const createdAt = new Date(now - item.hoursAgo * 60 * 60 * 1000);
-    await prisma.message.create({
-      data: {
-        content: item.content,
-        recipientRole: item.recipientRole,
-        tagColor: item.tagColor,
-        candleCount: item.candleCount,
-        viewsCount: item.viewsCount,
-        posX: item.posX,
-        posY: item.posY,
-        createdAt,
-      },
-      select: { id: true },
-    });
-  }
 }
 
 /**
@@ -186,7 +167,7 @@ function getSessionCookieData() {
  * Fetches all floating bottles, ocean statistics, and the user's current session state
  */
 export async function getOceanState(): Promise<OceanStateResponse> {
-  await ensureSeeded();
+  await purgeExpiredBottles();
 
   const { fingerprint, hasContributed, cookieViewedIds, cookieOwnIds } =
     getSessionCookieData();
@@ -278,8 +259,7 @@ export async function getOceanState(): Promise<OceanStateResponse> {
     .map((i) => i.messageId);
 
   const totalCandles = messages.reduce((sum, m) => sum + m.candleCount, 0);
-  const baseCandlesToday =
-    Math.min(totalCandles, 38) + candlesTodayList.length;
+  const candlesToday = candlesTodayList.length;
 
   return {
     bottles: messages.map((m) => ({
@@ -295,7 +275,7 @@ export async function getOceanState(): Promise<OceanStateResponse> {
     })),
     stats: {
       totalFloatingBottles: messages.length,
-      candlesToday: baseCandlesToday,
+      candlesToday,
       totalCandles,
       roleCandlesToday,
     },
@@ -322,9 +302,7 @@ export async function syncClientContribution(
   if (!fingerprint) {
     fingerprint = crypto.randomUUID();
     cookieStore.set(COOKIE_FINGERPRINT, fingerprint, {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
+      ...COOKIE_BASE_OPTIONS,
       maxAge: 60 * 60 * 24 * 365,
     });
   }
@@ -334,9 +312,7 @@ export async function syncClientContribution(
 
   if (clientHasContributedToday && !cookieContributedToday) {
     cookieStore.set(COOKIE_CONTRIBUTED, todayKey, {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
+      ...COOKIE_BASE_OPTIONS,
       maxAge: 60 * 60 * 24 * 2,
     });
     return { hasContributed: true };
@@ -448,16 +424,12 @@ export async function castBottleMessage(input: {
   const todayKey = getTodayDateKey();
   // Update cookies for fingerprint, today's contribution date, and owned bottle IDs
   cookieStore.set(COOKIE_FINGERPRINT, fingerprint, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
+    ...COOKIE_BASE_OPTIONS,
     maxAge: 60 * 60 * 24 * 365,
   });
 
   cookieStore.set(COOKIE_CONTRIBUTED, todayKey, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
+    ...COOKIE_BASE_OPTIONS,
     maxAge: 60 * 60 * 24 * 2,
   });
 
@@ -475,9 +447,7 @@ export async function castBottleMessage(input: {
     ownIds.push(created.id);
   }
   cookieStore.set(COOKIE_OWN_BOTTLES, JSON.stringify(ownIds.slice(-50)), {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
+    ...COOKIE_BASE_OPTIONS,
     maxAge: 60 * 60 * 24 * 365,
   });
 
@@ -585,17 +555,13 @@ export async function openBottleMessage(options?: {
 
   if (!hasContributed && effectiveHasContributed) {
     cookieStore.set(COOKIE_CONTRIBUTED, todayKey, {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
+      ...COOKIE_BASE_OPTIONS,
       maxAge: 60 * 60 * 24 * 2,
     });
   }
 
   cookieStore.set(COOKIE_FINGERPRINT, fingerprint, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
+    ...COOKIE_BASE_OPTIONS,
     maxAge: 60 * 60 * 24 * 365,
   });
 
@@ -748,9 +714,7 @@ export async function openBottleMessage(options?: {
       COOKIE_DAILY_VIEWS,
       JSON.stringify({ date: todayKey, ids: updatedViewedIds }),
       {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
+        ...COOKIE_BASE_OPTIONS,
         maxAge: 60 * 60 * 24 * 2,
       }
     );
@@ -804,9 +768,7 @@ export async function lightCandleForBottle(messageId: string): Promise<{
   const { fingerprint } = getSessionCookieData();
 
   cookieStore.set(COOKIE_FINGERPRINT, fingerprint, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
+    ...COOKIE_BASE_OPTIONS,
     maxAge: 60 * 60 * 24 * 365,
   });
 

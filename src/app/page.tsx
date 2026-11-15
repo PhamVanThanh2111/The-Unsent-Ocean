@@ -28,7 +28,6 @@ import {
   type OceanBottleDetail,
 } from "@/app/actions/ocean";
 import { RECIPIENT_ROLES } from "@/lib/constants";
-import { INITIAL_OCEAN_MESSAGES } from "@/lib/seed-data";
 import {
   DEFAULT_LOCALE,
   LOCALES,
@@ -39,22 +38,6 @@ import {
 } from "@/lib/i18n";
 import type { OceanRealtimeEvent } from "@/lib/realtime";
 import oceanAudio from "@/lib/audio";
-
-const FALLBACK_BOTTLES: OceanBottleSummary[] = INITIAL_OCEAN_MESSAGES.map(
-  (item, idx) => ({
-    id: `preview-${idx}`,
-    recipientRole: item.recipientRole,
-    tagColor: item.tagColor,
-    candleCount: item.candleCount,
-    viewsCount: item.viewsCount,
-    posX: item.posX,
-    posY: item.posY,
-    createdAt: new Date(
-      Date.now() - item.hoursAgo * 60 * 60 * 1000
-    ).toISOString(),
-    isOwn: false,
-  })
-);
 
 function getClientTodayKey(): string {
   const now = new Date();
@@ -181,9 +164,7 @@ export default function UnsentOceanPage() {
         setViewedTodayIds(state.session.viewedTodayIds);
         setLitCandleIds(state.session.litCandleIds);
       } catch {
-        if (mounted) {
-          setBottles(FALLBACK_BOTTLES);
-        }
+        // Keep empty ocean state if network/DB fails
       }
     }
 
@@ -332,7 +313,7 @@ export default function UnsentOceanPage() {
     setIsOpeningBottle(true);
     try {
       const res = await openBottleMessage({
-        messageId: bottle?.id.startsWith("preview-") ? undefined : bottle?.id,
+        messageId: bottle?.id,
         clientHasContributed: localContributedToday,
         clientOwnBottleIds: ownBottleIds,
       });

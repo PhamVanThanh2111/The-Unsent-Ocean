@@ -4,6 +4,13 @@ import { INITIAL_OCEAN_MESSAGES } from "../src/lib/seed-data";
 const prisma = new PrismaClient();
 
 async function main() {
+  if (process.env.ALLOW_DEV_SEED !== "true") {
+    console.log(
+      "Production mode: Automatic seeding of mock messages is disabled. (Set ALLOW_DEV_SEED=true to seed dev data)."
+    );
+    return;
+  }
+
   const existingCount = await prisma.message.count();
   if (existingCount > 0) {
     console.log(`Database already has ${existingCount} messages. Skipping seed.`);

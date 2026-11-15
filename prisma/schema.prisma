@@ -1,16 +1,17 @@
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 model Message {
   id            String        @id @default(cuid())
   content       String        // Nội dung thư (tối đa 500 ký tự)
-  recipientRole String        // Đối tượng nhận: "Người yêu cũ", "Bản thân năm 18 tuổi", "Người thân đã mất", "Crush thầm kín", "Gia đình", "Một người lạ", "Khác"
+  recipientRole String        // Đối tượng nhận: "Người yêu cũ", "Bản thân", "Người thân đã mất", "Crush thầm kín", "Gia đình", "Một người lạ", "Khác"...
   tagColor      String        @default("#4fd1c5") // Màu ánh sáng của chai
   candleCount   Int           @default(0)         // Số lượt thắp nến/thả tim
   viewsCount    Int           @default(0)         // Số lượt mở xem
@@ -22,18 +23,21 @@ model Message {
   posY          Float         @default(0.5)
 
   interactions  Interaction[]
+
+  @@index([isReported, createdAt])
 }
 
 model Interaction {
   id          String   @id @default(cuid())
   messageId   String
   fingerprint String   // Cookie UUID hoặc IP hash của người xem
-  type        String   // "CANDLE" (thắp nến) hoặc "VIEW" (vớt xem)
+  type        String   // "AUTHOR", "CANDLE" (thắp nến) hoặc "VIEW" (vớt xem)
   createdAt   DateTime @default(now())
 
   message     Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   @@unique([messageId, fingerprint, type])
   @@index([fingerprint, type, createdAt])
+  @@index([type, createdAt])
 }
 

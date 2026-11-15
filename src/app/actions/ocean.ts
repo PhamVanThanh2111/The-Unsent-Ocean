@@ -116,8 +116,8 @@ async function purgeExpiredBottles(): Promise<void> {
 /**
  * Reads or initializes the user's fingerprint, owned bottle IDs & daily view cookie state
  */
-function getSessionCookieData() {
-  const cookieStore = cookies();
+async function getSessionCookieData() {
+  const cookieStore = await cookies();
   let fingerprint = cookieStore.get(COOKIE_FINGERPRINT)?.value;
   if (!fingerprint) {
     fingerprint = crypto.randomUUID();
@@ -170,7 +170,7 @@ export async function getOceanState(): Promise<OceanStateResponse> {
   await purgeExpiredBottles();
 
   const { fingerprint, hasContributed, cookieViewedIds, cookieOwnIds } =
-    getSessionCookieData();
+    await getSessionCookieData();
   const startOfToday = getStartOfToday();
   const cutoff24h = getCutoff24HoursAgo();
 
@@ -296,7 +296,7 @@ export async function getOceanState(): Promise<OceanStateResponse> {
 export async function syncClientContribution(
   clientHasContributedToday: boolean
 ): Promise<{ hasContributed: boolean }> {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const todayKey = getTodayDateKey();
   let fingerprint = cookieStore.get(COOKIE_FINGERPRINT)?.value;
   if (!fingerprint) {
@@ -346,7 +346,7 @@ export async function castBottleMessage(input: {
   const normalizedContent = validation.normalizedContent;
   const isSuspicious = Boolean(validation.isSoftFlagged);
 
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   let fingerprint = cookieStore.get(COOKIE_FINGERPRINT)?.value;
   if (!fingerprint) {
     fingerprint = crypto.randomUUID();
@@ -498,14 +498,14 @@ export async function openBottleMessage(options?: {
   viewsToday?: number;
   maxDailyViews?: number;
 }> {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const {
     fingerprint,
     hasContributed,
     cookieViewedIds,
     cookieOwnIds,
     todayKey,
-  } = getSessionCookieData();
+  } = await getSessionCookieData();
 
   const startOfToday = getStartOfToday();
 
@@ -764,8 +764,8 @@ export async function lightCandleForBottle(messageId: string): Promise<{
     return { ok: false, error: "Bottle not found." };
   }
 
-  const cookieStore = cookies();
-  const { fingerprint } = getSessionCookieData();
+  const cookieStore = await cookies();
+  const { fingerprint } = await getSessionCookieData();
 
   cookieStore.set(COOKIE_FINGERPRINT, fingerprint, {
     ...COOKIE_BASE_OPTIONS,

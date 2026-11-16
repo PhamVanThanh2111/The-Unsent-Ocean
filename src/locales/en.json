@@ -92,5 +92,8 @@
   "rule_quota_message": "You have listened enough for today. Let your heart rest in peace.",
   "rule_quota_close": "I understand, see you tomorrow night",
   "toast_bottle_cast": "Your bottle has joined the ocean current. You can now pick up and read letters on the sea.",
-  "toast_bottle_reported": "Hidden this bottle from your ocean view."
+  "toast_bottle_reported": "Hidden this bottle from your ocean view.",
+  "ocean_empty_title": "No bottles are drifting on the midnight sea yet",
+  "ocean_empty_subtitle": "Be the first soul tonight to cast an unspoken letter into the waves",
+  "toast_no_other_bottles": "There are no other bottles drifting on the sea right now."
 }

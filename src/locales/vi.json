@@ -92,5 +92,8 @@
   "rule_quota_message": "Bạn đã lắng nghe đủ cho ngày hôm nay. Hãy để lòng mình nghỉ ngơi.",
   "rule_quota_close": "Mình đã hiểu, hẹn biển đêm ngày mai",
   "toast_bottle_cast": "Chiếc chai của bạn đã hòa vào dòng hải lưu. Giờ bạn có thể vớt và lắng nghe tâm sự trên biển.",
-  "toast_bottle_reported": "Đã ẩn bức thư khỏi vùng biển của bạn."
+  "toast_bottle_reported": "Đã ẩn bức thư khỏi vùng biển của bạn.",
+  "ocean_empty_title": "Hiện chưa có chiếc chai nào được gửi vào biển đêm",
+  "ocean_empty_subtitle": "Hãy là người đầu tiên gửi lại một lời chưa nói vào lòng đại dương",
+  "toast_no_other_bottles": "Hiện chưa có chai tâm sự nào của người khác đang trôi trên biển."
 }

@@ -32,6 +32,11 @@ export const metadata: Metadata = {
   title: "The Unsent Ocean — Bảo Tàng Tin Nhắn Chưa Gửi",
   description:
     "Nơi cất giữ những lá thư không người nhận. Hãy gửi lại biển đêm một lời chưa nói để lắng nghe tâm sự từ những tâm hồn đồng điệu.",
+  icons: {
+    icon: "/ocean-bottle-icon.png",
+    shortcut: "/ocean-bottle-icon.png",
+    apple: "/ocean-bottle-icon.png",
+  },
 };
 
 export default function RootLayout({
@@ -42,9 +47,13 @@ export default function RootLayout({
   return (
     <html
       lang="vi"
+      suppressHydrationWarning
       className={`${plusJakarta.variable} ${cormorant.variable} ${caveat.variable} dark`}
     >
-      <body className="font-sans bg-midnight text-slate-100 antialiased selection:bg-biocyan/30 selection:text-biocyan">
+      <body
+        suppressHydrationWarning
+        className="font-sans bg-midnight text-slate-100 antialiased selection:bg-biocyan/30 selection:text-biocyan"
+      >
         {children}
       </body>
     </html>

@@ -16,7 +16,9 @@ const COOKIE_CONTRIBUTED = "has_contributed";
 const COOKIE_DAILY_VIEWS = "unsent_daily_views";
 const COOKIE_OWN_BOTTLES = "unsent_own_bottles";
 const MAX_DAILY_VIEWS = 3;
-const BOTTLE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours lifespan on the ocean
+const BOTTLE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days lifespan on the ocean
+const MIN_RETAINED_BOTTLES = 30; // Always keep at least the newest 30 bottles so the ocean never goes empty when traffic is low
+const DUPLICATE_CHECK_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const COOKIE_BASE_OPTIONS = {
   httpOnly: true,
@@ -87,28 +89,49 @@ function getStartOfToday(): Date {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
 }
 
-function getCutoff24HoursAgo(): Date {
+function getCutoffRetentionDate(): Date {
   return new Date(Date.now() - BOTTLE_TTL_MS);
 }
 
 /**
- * Purges expired bottles (> 24 hours old) and any legacy dev/seed messages without an AUTHOR interaction
+ * Adaptive Ocean Retention:
+ * 1. Removes legacy un-authored seed messages.
+ * 2. Always retains at least MIN_RETAINED_BOTTLES (30) newest bottles regardless of age.
+ * 3. Only purges bottles older than 30 days when the ocean already has > 30 active bottles.
  */
 async function purgeExpiredBottles(): Promise<void> {
-  const cutoff24h = getCutoff24HoursAgo();
+  // Remove any legacy mock/seed messages without an AUTHOR interaction
+  await prisma.message.deleteMany({
+    where: {
+      interactions: {
+        none: {
+          type: "AUTHOR",
+        },
+      },
+    },
+  });
+
+  // Find the 30th newest bottle to protect at least MIN_RETAINED_BOTTLES on the ocean
+  const protectedBoundary = await prisma.message.findMany({
+    where: { isReported: false },
+    orderBy: { createdAt: "desc" },
+    skip: MIN_RETAINED_BOTTLES,
+    take: 1,
+    select: { createdAt: true },
+  });
+
+  if (protectedBoundary.length === 0) {
+    // Fewer than 30 bottles on the ocean — keep all of them so the sea never empties out!
+    return;
+  }
+
+  const cutoff30d = getCutoffRetentionDate();
+  const boundaryDate = protectedBoundary[0].createdAt;
+  const effectiveCutoff = boundaryDate < cutoff30d ? boundaryDate : cutoff30d;
 
   await prisma.message.deleteMany({
     where: {
-      OR: [
-        { createdAt: { lt: cutoff24h } },
-        {
-          interactions: {
-            none: {
-              type: "AUTHOR",
-            },
-          },
-        },
-      ],
+      createdAt: { lt: effectiveCutoff },
     },
   });
 }
@@ -172,14 +195,12 @@ export async function getOceanState(): Promise<OceanStateResponse> {
   const { fingerprint, hasContributed, cookieViewedIds, cookieOwnIds } =
     await getSessionCookieData();
   const startOfToday = getStartOfToday();
-  const cutoff24h = getCutoff24HoursAgo();
 
   const [messages, candlesTodayList, userInteractions] =
     await Promise.all([
       prisma.message.findMany({
         where: {
           isReported: false,
-          createdAt: { gte: cutoff24h },
         },
         orderBy: { createdAt: "desc" },
         take: 100,
@@ -371,11 +392,11 @@ export async function castBottleMessage(input: {
   }
 
   // Layer 7b: Duplicate Content Check (Rejects copy-pasted or identical letters in the last 24h)
-  const cutoff24h = getCutoff24HoursAgo();
+  const cutoffDuplicate = new Date(Date.now() - DUPLICATE_CHECK_WINDOW_MS);
   const duplicateMsg = await prisma.message.findFirst({
     where: {
       content: normalizedContent,
-      createdAt: { gte: cutoff24h },
+      createdAt: { gte: cutoffDuplicate },
     },
     select: { id: true },
   });
@@ -601,9 +622,7 @@ export async function openBottleMessage(options?: {
     };
   }
 
-  const cutoff24h = getCutoff24HoursAgo();
-
-  // If no specific messageId was passed ("Pick a Random Bottle"), pick an unviewed bottle from someone else within 24h
+  // If no specific messageId was passed ("Pick a Random Bottle"), pick an unviewed bottle from someone else
   if (!targetMessageId) {
     const excludeIds = Array.from(
       new Set([...Array.from(viewedOtherSet), ...Array.from(ownBottleSet)])
@@ -612,7 +631,6 @@ export async function openBottleMessage(options?: {
     const candidates = await prisma.message.findMany({
       where: {
         isReported: false,
-        createdAt: { gte: cutoff24h },
         id: { notIn: excludeIds },
       },
       select: { id: true },
@@ -622,7 +640,6 @@ export async function openBottleMessage(options?: {
       const fallbackCandidates = await prisma.message.findMany({
         where: {
           isReported: false,
-          createdAt: { gte: cutoff24h },
           id: { notIn: Array.from(ownBottleSet) },
         },
         select: { id: true },
@@ -648,7 +665,6 @@ export async function openBottleMessage(options?: {
     where: {
       id: targetMessageId,
       isReported: false,
-      createdAt: { gte: cutoff24h },
     },
     select: MESSAGE_SELECT_FIELDS,
   });

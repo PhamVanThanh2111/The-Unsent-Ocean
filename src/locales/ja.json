@@ -92,5 +92,8 @@
   "rule_quota_message": "今日は十分に耳を傾けました。今夜はゆっくり心を休めてください。",
   "rule_quota_close": "わかりました、また明日の夜に",
   "toast_bottle_cast": "あなたの瓶が海流に乗りました。他の手紙を拾って読むことができます。",
-  "toast_bottle_reported": "この手紙を海から非表示にしました。"
+  "toast_bottle_reported": "この手紙を海から非表示にしました。",
+  "ocean_empty_title": "まだ夜の海に流された瓶はありません",
+  "ocean_empty_subtitle": "最初のひとりとして、言えなかった想いを波間に託してみませんか",
+  "toast_no_other_bottles": "現在、海に漂っている他の人の瓶はまだありません。"
 }

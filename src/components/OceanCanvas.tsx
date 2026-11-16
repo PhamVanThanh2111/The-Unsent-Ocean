@@ -185,10 +185,27 @@ export const OceanCanvas: React.FC<OceanCanvasProps> = ({
   });
   const cameraXRef = useRef<number>(0);
   const panVelocityXRef = useRef<number>(0);
-  const pointerRef = useRef<{ x: number; y: number; active: boolean }>({
+  const pointerRef = useRef<{
+    x: number;
+    y: number;
+    active: boolean;
+    pointerType: string;
+  }>({
     x: -9999,
     y: -9999,
     active: false,
+    pointerType: "mouse",
+  });
+  const dragRef = useRef<{
+    isDown: boolean;
+    startX: number;
+    lastX: number;
+    movedDist: number;
+  }>({
+    isDown: false,
+    startX: 0,
+    lastX: 0,
+    movedDist: 0,
   });
 
   const [hoveredBottle, setHoveredBottle] = useState<{
@@ -389,13 +406,18 @@ export const OceanCanvas: React.FC<OceanCanvasProps> = ({
       const time = (now - startTime) * 0.001;
       const horizonY = height * 0.23;
 
-      // 0. Update Smooth Edge-Hover Camera Panning when bottles overflow horizontally
+      // 0. Update Smooth Edge-Hover Camera Panning (desktop mouse) & Swipe Inertia (mobile touch)
       const { minCameraX, maxCameraX } = layoutRef.current;
       const hasOverflow = maxCameraX - minCameraX > 4;
       const edgeZonePx = Math.min(130, width * 0.13);
       let targetVelX = 0;
 
-      if (hasOverflow && pointerRef.current.active) {
+      if (
+        hasOverflow &&
+        pointerRef.current.active &&
+        pointerRef.current.pointerType === "mouse" &&
+        !dragRef.current.isDown
+      ) {
         const mx = pointerRef.current.x;
         const my = pointerRef.current.y;
         // Only trigger edge panning when pointer is in the ocean middle vertical band
@@ -420,12 +442,15 @@ export const OceanCanvas: React.FC<OceanCanvasProps> = ({
         }
       }
 
-      panVelocityXRef.current += (targetVelX - panVelocityXRef.current) * 0.1;
-      if (Math.abs(panVelocityXRef.current) > 0.01) {
-        cameraXRef.current = Math.max(
-          minCameraX,
-          Math.min(maxCameraX, cameraXRef.current + panVelocityXRef.current)
-        );
+      if (!dragRef.current.isDown) {
+        panVelocityXRef.current +=
+          (targetVelX - panVelocityXRef.current) * 0.08;
+        if (Math.abs(panVelocityXRef.current) > 0.01) {
+          cameraXRef.current = Math.max(
+            minCameraX,
+            Math.min(maxCameraX, cameraXRef.current + panVelocityXRef.current)
+          );
+        }
       }
       const camX = cameraXRef.current;
 
@@ -1004,6 +1029,25 @@ export const OceanCanvas: React.FC<OceanCanvasProps> = ({
     [getBottleCoords]
   );
 
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    dragRef.current = {
+      isDown: true,
+      startX: e.clientX,
+      lastX: e.clientX,
+      movedDist: 0,
+    };
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const rect = canvas.getBoundingClientRect();
+      pointerRef.current = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+        active: true,
+        pointerType: e.pointerType || "mouse",
+      };
+    }
+  };
+
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -1011,9 +1055,30 @@ export const OceanCanvas: React.FC<OceanCanvasProps> = ({
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
+    // Handle touch / drag horizontal camera swipe when bottles overflow
+    if (dragRef.current.isDown) {
+      const dx = e.clientX - dragRef.current.lastX;
+      dragRef.current.movedDist += Math.abs(dx);
+      dragRef.current.lastX = e.clientX;
+
+      const { minCameraX, maxCameraX } = layoutRef.current;
+      if (maxCameraX - minCameraX > 4) {
+        cameraXRef.current = Math.max(
+          minCameraX,
+          Math.min(maxCameraX, cameraXRef.current - dx * 1.15)
+        );
+        panVelocityXRef.current = -dx * 0.85;
+      }
+    }
+
     const prev = pointerRef.current;
     const moveDist = Math.hypot(x - prev.x, y - prev.y);
-    pointerRef.current = { x, y, active: true };
+    pointerRef.current = {
+      x,
+      y,
+      active: true,
+      pointerType: e.pointerType || "mouse",
+    };
 
     const now = performance.now();
     if (
@@ -1047,13 +1112,31 @@ export const OceanCanvas: React.FC<OceanCanvasProps> = ({
     }
   };
 
+  const handlePointerUpOrCancel = (
+    e: React.PointerEvent<HTMLCanvasElement>
+  ) => {
+    dragRef.current.isDown = false;
+    if (e.pointerType !== "mouse") {
+      pointerRef.current.active = false;
+      hoveredIdRef.current = null;
+      if (hoveredBottle) setHoveredBottle(null);
+    }
+  };
+
   const handlePointerLeave = () => {
+    dragRef.current.isDown = false;
     pointerRef.current.active = false;
     hoveredIdRef.current = null;
     if (hoveredBottle) setHoveredBottle(null);
   };
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    // Ignore click if the user was swiping/dragging the ocean camera
+    if (dragRef.current.movedDist > 12) {
+      dragRef.current.movedDist = 0;
+      return;
+    }
+
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -1097,10 +1180,13 @@ export const OceanCanvas: React.FC<OceanCanvasProps> = ({
     <div className="relative inset-0 w-full h-full overflow-hidden select-none">
       <canvas
         ref={canvasRef}
+        onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUpOrCancel}
+        onPointerCancel={handlePointerUpOrCancel}
         onPointerLeave={handlePointerLeave}
         onClick={handleCanvasClick}
-        className={`block w-full h-full ${
+        className={`block w-full h-full touch-none ${
           hoveredBottle ? "cursor-pointer" : "cursor-default"
         }`}
       />

@@ -11,7 +11,6 @@ import {
   Lock,
   Moon,
   Sparkles,
-  Waves,
   CheckCircle2,
   Globe,
   ChevronRight,
@@ -55,6 +54,7 @@ export default function UnsentOceanPage() {
 
   // 2. Ocean & Session state (Start empty until DB state resolves so initial render never flashes fallback bottles)
   const [bottles, setBottles] = useState<OceanBottleSummary[]>([]);
+  const [isOceanLoaded, setIsOceanLoaded] = useState<boolean>(false);
   const [candlesToday, setCandlesToday] = useState<number>(0);
   const [roleCandlesToday, setRoleCandlesToday] = useState<
     Record<string, number>
@@ -165,6 +165,10 @@ export default function UnsentOceanPage() {
         setLitCandleIds(state.session.litCandleIds);
       } catch {
         // Keep empty ocean state if network/DB fails
+      } finally {
+        if (mounted) {
+          setIsOceanLoaded(true);
+        }
       }
     }
 
@@ -324,6 +328,8 @@ export default function UnsentOceanPage() {
         } else if (res.code === "QUOTA_EXCEEDED") {
           setViewsToday(maxDailyViews);
           setNoticeModal("QUOTA_EXCEEDED");
+        } else if (res.code === "NOT_FOUND") {
+          triggerToast(t.toast_no_other_bottles);
         } else if (res.error) {
           triggerToast(res.error);
         }
@@ -425,269 +431,301 @@ export default function UnsentOceanPage() {
         onSelectBottle={(bottle) => handlePickBottle(bottle)}
       />
 
-      {/* 2. MINIMALIST HEADER */}
-      <header className="pointer-events-none fixed inset-x-0 top-0 z-30 flex flex-col gap-3 px-4 pt-4 lg:flex-row lg:items-start lg:justify-between sm:px-8 sm:pt-6">
-        {/* Top-Left: Brand Logo & Poetic Subtitle */}
-        <div className="pointer-events-auto flex items-center gap-3.5">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-biocyan/30 bg-midnight/75 shadow-[0_0_25px_rgba(79,209,197,0.2)] backdrop-blur-md">
-            <Waves className="h-5 w-5 text-biocyan" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="font-serif text-2xl sm:text-3xl font-semibold tracking-wider text-slate-100 drop-shadow-[0_2px_12px_rgba(79,209,197,0.25)]">
-                {t.app_title}
-              </h1>
-              <span className="hidden md:inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-0.5 text-[10px] uppercase tracking-widest text-biocyan">
-                {t.app_badge}
-              </span>
-            </div>
-            <p className="text-xs sm:text-sm font-light tracking-wide text-slate-400">
-              {t.app_subtitle}
-            </p>
-          </div>
-        </div>
-
-        {/* Top-Right: Language Switcher, Audio + Volume Slider & Live Ocean Stats */}
-        <div className="pointer-events-auto flex flex-col items-start lg:items-end gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Collapsible Multi-Language Switcher (Default: EN, expand/collapse with > / <) */}
-            <div className="flex items-center gap-1 rounded-full border border-white/15 bg-midnight/80 px-2 py-1 text-xs backdrop-blur-md transition-all">
-              <Globe className="ml-1 mr-0.5 h-3.5 w-3.5 text-slate-400" />
-              {!isLangExpanded ? (
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setIsLangExpanded(true)}
-                    className="rounded-full bg-biocyan px-2 py-0.5 text-[11px] font-semibold text-midnight shadow-[0_0_10px_rgba(79,209,197,0.45)]"
-                  >
-                    {LOCALE_OPTIONS.find((o) => o.code === locale)?.flag ??
-                      "EN"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsLangExpanded(true)}
-                    aria-label="Expand languages"
-                    className="flex h-5 w-5 items-center justify-center rounded-full text-slate-400 transition hover:bg-white/10 hover:text-white"
-                  >
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1">
-                  {LOCALE_OPTIONS.map((opt) => {
-                    const active = locale === opt.code;
-                    return (
-                      <button
-                        key={opt.code}
-                        type="button"
-                        onClick={() => {
-                          handleSelectLocale(opt.code);
-                          setIsLangExpanded(false);
-                        }}
-                        title={opt.label}
-                        className={`rounded-full px-2 py-0.5 text-[11px] font-semibold transition-all ${
-                          active
-                            ? "bg-biocyan text-midnight shadow-[0_0_10px_rgba(79,209,197,0.45)]"
-                            : "text-slate-400 hover:text-white"
-                        }`}
-                      >
-                        {opt.flag}
-                      </button>
-                    );
-                  })}
-                  <button
-                    type="button"
-                    onClick={() => setIsLangExpanded(false)}
-                    aria-label="Collapse languages"
-                    className="flex h-5 w-5 items-center justify-center rounded-full text-slate-400 transition hover:bg-white/10 hover:text-white"
-                  >
-                    <ChevronLeft className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Ambient Audio Reminder Badge (when muted) */}
-            <AnimatePresence>
-              {showAudioHint && !isAudioPlaying && (
-                <motion.button
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 10 }}
-                  type="button"
-                  onClick={handleToggleAudio}
-                  className="hidden sm:flex items-center gap-1.5 rounded-full border border-biocyan/30 bg-midnight/80 px-3 py-1.5 text-[11px] text-biocyan shadow-lg backdrop-blur-md transition hover:border-biocyan/60 hover:bg-biocyan/10"
-                >
-                  <Sparkles className="h-3 w-3 animate-pulse" />
-                  <span>{t.audio_hint}</span>
-                </motion.button>
-              )}
-            </AnimatePresence>
-
-            {/* Sound Toggle + Interactive Volume Slider Control */}
-            <div
-              className={`flex items-center gap-2.5 rounded-full border px-3.5 py-1.5 text-xs font-medium backdrop-blur-md transition-all ${
-                isAudioPlaying
-                  ? "border-biocyan/50 bg-biocyan/15 text-biocyan shadow-[0_0_20px_rgba(79,209,197,0.25)]"
-                  : "border-white/15 bg-midnight/80 text-slate-300"
-              }`}
-            >
-              <button
-                type="button"
-                onClick={handleToggleAudio}
-                className="flex items-center gap-2 hover:opacity-90"
-              >
-                {isAudioPlaying ? (
-                  <>
-                    <Volume2 className="h-4 w-4 text-biocyan" />
-                    <div className="flex h-3.5 items-end gap-0.5">
-                      <span
-                        className="w-0.5 bg-biocyan rounded-full animate-sound-wave"
-                        style={{ animationDelay: "0ms" }}
-                      />
-                      <span
-                        className="w-0.5 bg-biocyan rounded-full animate-sound-wave"
-                        style={{ animationDelay: "220ms" }}
-                      />
-                      <span
-                        className="w-0.5 bg-biocyan rounded-full animate-sound-wave"
-                        style={{ animationDelay: "440ms" }}
-                      />
-                      <span
-                        className="w-0.5 bg-biocyan rounded-full animate-sound-wave"
-                        style={{ animationDelay: "150ms" }}
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <VolumeX className="h-4 w-4 text-slate-400 hover:text-white" />
-                )}
-                <span className="hidden sm:inline">
-                  {isAudioPlaying ? t.audio_on_label : t.audio_off_label}
-                </span>
-              </button>
-
-              {/* Volume Slider (0% - 100%) */}
-              <div className="flex items-center gap-2 border-l border-white/15 pl-2.5">
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={isAudioPlaying ? volumePercent : 0}
-                  onChange={handleVolumeChange}
-                  aria-label={t.audio_volume_label}
-                  className="h-1.5 w-20 sm:w-24 cursor-pointer appearance-none rounded-lg bg-white/20 accent-[#4fd1c5]"
-                />
-                <span className="w-8 text-right text-[11px] tabular-nums text-slate-300">
-                  {isAudioPlaying ? `${volumePercent}%` : "0%"}
+      {/* 2. TOP OVERLAY: HEADER + RECIPIENT FILTER BAR IN UNIFIED FLEX FLOW (Prevents mobile overlap) */}
+      <div className="pointer-events-none fixed inset-x-0 top-0 z-30 flex flex-col gap-2 sm:gap-3 px-3.5 pt-3 sm:px-8 sm:pt-5">
+        <header className="flex flex-col gap-2 sm:gap-3 lg:flex-row lg:items-start lg:justify-between">
+          {/* Top-Left: Brand Logo & Poetic Subtitle */}
+          <div className="pointer-events-auto flex items-center gap-3">
+            <img
+              src="/ocean-bottle-icon.png"
+              alt={t.app_title}
+              className="h-11 w-11 sm:h-13 sm:w-13 shrink-0 object-contain drop-shadow-[0_0_14px_rgba(79,209,197,0.45)]"
+            />
+            <div className="min-w-0">
+              <div className="flex items-center gap-2.5">
+                <h1 className="font-serif text-xl sm:text-3xl font-semibold tracking-wider text-slate-100 drop-shadow-[0_2px_12px_rgba(79,209,197,0.25)] truncate">
+                  {t.app_title}
+                </h1>
+                <span className="hidden md:inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-0.5 text-[10px] uppercase tracking-widest text-biocyan">
+                  {t.app_badge}
                 </span>
               </div>
+              <p className="text-[11px] sm:text-sm font-light tracking-wide text-slate-400 line-clamp-1">
+                {t.app_subtitle}
+              </p>
             </div>
           </div>
 
-          {/* Live Ocean Metrics Pill */}
-          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-midnight/75 px-3.5 py-1.5 text-[11px] sm:text-xs text-slate-300 shadow-lg backdrop-blur-md">
-            <span className="flex items-center gap-1.5">
-              <Flame className="h-3.5 w-3.5 text-candlegold fill-candlegold/80" />
-              <span>
-                {t.stats_candles_today_prefix}{" "}
-                <strong className="font-semibold text-candlegold">
-                  {candlesToday}
-                </strong>{" "}
-                {t.stats_candles_today_suffix}
-              </span>
-            </span>
-            <span className="text-white/20">/</span>
-            <span className="flex items-center gap-1">
-              <strong className="font-semibold text-biocyan">
-                {bottles.length}
-              </strong>{" "}
-              {t.stats_bottles_drifting_suffix}
-            </span>
-          </div>
+          {/* Top-Right: Language Switcher, Audio + Volume Slider & Live Ocean Stats */}
+          <div className="pointer-events-auto flex flex-col items-start lg:items-end gap-1.5 sm:gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              {/* Collapsible Multi-Language Switcher (Default: EN, expand/collapse with > / <) */}
+              <div className="flex items-center gap-1 rounded-full border border-white/15 bg-midnight/80 px-2 py-1 text-xs backdrop-blur-md transition-all">
+                <Globe className="ml-1 mr-0.5 h-3.5 w-3.5 text-slate-400" />
+                {!isLangExpanded ? (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsLangExpanded(true)}
+                      className="rounded-full bg-biocyan px-2 py-0.5 text-[11px] font-semibold text-midnight shadow-[0_0_10px_rgba(79,209,197,0.45)]"
+                    >
+                      {LOCALE_OPTIONS.find((o) => o.code === locale)?.flag ??
+                        "EN"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsLangExpanded(true)}
+                      aria-label="Expand languages"
+                      className="flex h-5 w-5 items-center justify-center rounded-full text-slate-400 transition hover:bg-white/10 hover:text-white"
+                    >
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    {LOCALE_OPTIONS.map((opt) => {
+                      const active = locale === opt.code;
+                      return (
+                        <button
+                          key={opt.code}
+                          type="button"
+                          onClick={() => {
+                            handleSelectLocale(opt.code);
+                            setIsLangExpanded(false);
+                          }}
+                          title={opt.label}
+                          className={`rounded-full px-2 py-0.5 text-[11px] font-semibold transition-all ${
+                            active
+                              ? "bg-biocyan text-midnight shadow-[0_0_10px_rgba(79,209,197,0.45)]"
+                              : "text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          {opt.flag}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setIsLangExpanded(false)}
+                      aria-label="Collapse languages"
+                      className="flex h-5 w-5 items-center justify-center rounded-full text-slate-400 transition hover:bg-white/10 hover:text-white"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
 
-          {/* Quota & Contribution Status Pill */}
-          <div className="flex items-center gap-2 text-[11px]">
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 backdrop-blur-md ${
-                hasContributed
-                  ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-300"
-                  : "border-amber-400/30 bg-amber-500/10 text-amber-300"
-              }`}
-            >
-              {hasContributed ? (
-                <>
-                  <CheckCircle2 className="h-3 w-3" />
-                  <span>{t.status_unlocked}</span>
-                </>
-              ) : (
-                <>
-                  <Lock className="h-3 w-3" />
-                  <span>{t.status_locked}</span>
-                </>
-              )}
-            </span>
+              {/* Ambient Audio Reminder Badge (when muted) */}
+              <AnimatePresence>
+                {showAudioHint && !isAudioPlaying && (
+                  <motion.button
+                    initial={{ opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 10 }}
+                    type="button"
+                    onClick={handleToggleAudio}
+                    className="hidden sm:flex items-center gap-1.5 rounded-full border border-biocyan/30 bg-midnight/80 px-3 py-1.5 text-[11px] text-biocyan shadow-lg backdrop-blur-md transition hover:border-biocyan/60 hover:bg-biocyan/10"
+                  >
+                    <Sparkles className="h-3 w-3 animate-pulse" />
+                    <span>{t.audio_hint}</span>
+                  </motion.button>
+                )}
+              </AnimatePresence>
 
-            <span className="rounded-full border border-white/10 bg-midnight/75 px-2.5 py-0.5 text-slate-400 backdrop-blur-md">
-              {t.status_quota_label}{" "}
-              <strong className="text-slate-200">
-                {viewsToday}/{maxDailyViews}
-              </strong>
-            </span>
-          </div>
-        </div>
-      </header>
-
-      {/* 3. SUBTLE RECIPIENT FILTER BAR: Always "All" at start + Top 6 by Candles Today + Always "Other" at end */}
-      <div className="pointer-events-none fixed inset-x-0 top-[158px] lg:top-[116px] z-20 flex justify-center px-4">
-        <div className="pointer-events-auto flex max-w-full items-center gap-1.5 overflow-x-auto rounded-full border border-white/10 bg-midnight/65 px-2.5 py-1.5 backdrop-blur-md no-scrollbar">
-          {/* Always First: All ("Tất cả") */}
-          <button
-            type="button"
-            onClick={() => setSelectedRoleFilter("ALL")}
-            className={`whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-medium transition-all ${
-              selectedRoleFilter === "ALL"
-                ? "bg-biocyan/20 text-biocyan border border-biocyan/40 shadow-[0_0_12px_rgba(79,209,197,0.25)]"
-                : "text-slate-400 hover:bg-white/5 hover:text-slate-200 border border-transparent"
-            }`}
-          >
-            {t.filter_all}
-          </button>
-
-          {/* Middle: Top 6 Recipient Roles sorted by most candles lit today */}
-          {topSixRoles.map((role) => {
-            const active = selectedRoleFilter === role;
-            return (
-              <button
-                key={role}
-                type="button"
-                onClick={() => setSelectedRoleFilter(role)}
-                className={`whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-medium transition-all ${
-                  active
-                    ? "bg-biocyan/20 text-biocyan border border-biocyan/40 shadow-[0_0_12px_rgba(79,209,197,0.25)]"
-                    : "text-slate-400 hover:bg-white/5 hover:text-slate-200 border border-transparent"
+              {/* Sound Toggle + Interactive Volume Slider Control */}
+              <div
+                className={`flex items-center gap-2 rounded-full border px-3 py-1 sm:px-3.5 sm:py-1.5 text-xs font-medium backdrop-blur-md transition-all ${
+                  isAudioPlaying
+                    ? "border-biocyan/50 bg-biocyan/15 text-biocyan shadow-[0_0_20px_rgba(79,209,197,0.25)]"
+                    : "border-white/15 bg-midnight/80 text-slate-300"
                 }`}
               >
-                {translateRecipientRole(role, t)}
-              </button>
-            );
-          })}
+                <button
+                  type="button"
+                  onClick={handleToggleAudio}
+                  className="flex items-center gap-2 hover:opacity-90"
+                >
+                  {isAudioPlaying ? (
+                    <>
+                      <Volume2 className="h-4 w-4 text-biocyan" />
+                      <div className="flex h-3.5 items-end gap-0.5">
+                        <span
+                          className="w-0.5 bg-biocyan rounded-full animate-sound-wave"
+                          style={{ animationDelay: "0ms" }}
+                        />
+                        <span
+                          className="w-0.5 bg-biocyan rounded-full animate-sound-wave"
+                          style={{ animationDelay: "220ms" }}
+                        />
+                        <span
+                          className="w-0.5 bg-biocyan rounded-full animate-sound-wave"
+                          style={{ animationDelay: "440ms" }}
+                        />
+                        <span
+                          className="w-0.5 bg-biocyan rounded-full animate-sound-wave"
+                          style={{ animationDelay: "150ms" }}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <VolumeX className="h-4 w-4 text-slate-400 hover:text-white" />
+                  )}
+                  <span className="hidden sm:inline">
+                    {isAudioPlaying ? t.audio_on_label : t.audio_off_label}
+                  </span>
+                </button>
 
-          {/* Always Last: Other ("Khác") */}
-          <button
-            type="button"
-            onClick={() => setSelectedRoleFilter("Khác")}
-            className={`whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-medium transition-all ${
-              selectedRoleFilter === "Khác"
-                ? "bg-biocyan/20 text-biocyan border border-biocyan/40 shadow-[0_0_12px_rgba(79,209,197,0.25)]"
-                : "text-slate-400 hover:bg-white/5 hover:text-slate-200 border border-transparent"
-            }`}
-          >
-            {t.role_other}
-          </button>
+                {/* Volume Slider (0% - 100%) */}
+                <div className="flex items-center gap-1.5 sm:gap-2 border-l border-white/15 pl-2">
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={isAudioPlaying ? volumePercent : 0}
+                    onChange={handleVolumeChange}
+                    aria-label={t.audio_volume_label}
+                    className="h-1.5 w-16 sm:w-24 cursor-pointer appearance-none rounded-lg bg-white/20 accent-[#4fd1c5]"
+                  />
+                  <span className="w-7 sm:w-8 text-right text-[11px] tabular-nums text-slate-300">
+                    {isAudioPlaying ? `${volumePercent}%` : "0%"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Live Ocean Metrics Pill */}
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-midnight/75 px-3 py-1 sm:px-3.5 sm:py-1.5 text-[11px] sm:text-xs text-slate-300 shadow-lg backdrop-blur-md">
+              <span className="flex items-center gap-1.5">
+                <Flame className="h-3.5 w-3.5 text-candlegold fill-candlegold/80" />
+                <span>
+                  {t.stats_candles_today_prefix}{" "}
+                  <strong className="font-semibold text-candlegold">
+                    {candlesToday}
+                  </strong>{" "}
+                  {t.stats_candles_today_suffix}
+                </span>
+              </span>
+              <span className="text-white/20">/</span>
+              <span className="flex items-center gap-1">
+                <strong className="font-semibold text-biocyan">
+                  {bottles.length}
+                </strong>{" "}
+                {t.stats_bottles_drifting_suffix}
+              </span>
+            </div>
+
+            {/* Quota & Contribution Status Pill */}
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px]">
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 backdrop-blur-md ${
+                  hasContributed
+                    ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-300"
+                    : "border-amber-400/30 bg-amber-500/10 text-amber-300"
+                }`}
+              >
+                {hasContributed ? (
+                  <>
+                    <CheckCircle2 className="h-3 w-3 shrink-0" />
+                    <span>{t.status_unlocked}</span>
+                  </>
+                ) : (
+                  <>
+                    <Lock className="h-3 w-3 shrink-0" />
+                    <span>{t.status_locked}</span>
+                  </>
+                )}
+              </span>
+
+              <span className="rounded-full border border-white/10 bg-midnight/75 px-2.5 py-0.5 text-slate-400 backdrop-blur-md">
+                {t.status_quota_label}{" "}
+                <strong className="text-slate-200">
+                  {viewsToday}/{maxDailyViews}
+                </strong>
+              </span>
+            </div>
+          </div>
+        </header>
+
+        {/* 3. SUBTLE RECIPIENT FILTER BAR: Always "All" at start + Top 6 by Candles Today + Always "Other" at end */}
+        <div className="flex justify-center">
+          <div className="pointer-events-auto flex max-w-full items-center gap-1.5 overflow-x-auto rounded-full border border-white/10 bg-midnight/65 px-2.5 py-1.5 backdrop-blur-md no-scrollbar">
+            {/* Always First: All ("Tất cả") */}
+            <button
+              type="button"
+              onClick={() => setSelectedRoleFilter("ALL")}
+              className={`whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-medium transition-all ${
+                selectedRoleFilter === "ALL"
+                  ? "bg-biocyan/20 text-biocyan border border-biocyan/40 shadow-[0_0_12px_rgba(79,209,197,0.25)]"
+                  : "text-slate-400 hover:bg-white/5 hover:text-slate-200 border border-transparent"
+              }`}
+            >
+              {t.filter_all}
+            </button>
+
+            {/* Middle: Top 6 Recipient Roles sorted by most candles lit today */}
+            {topSixRoles.map((role) => {
+              const active = selectedRoleFilter === role;
+              return (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => setSelectedRoleFilter(role)}
+                  className={`whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-medium transition-all ${
+                    active
+                      ? "bg-biocyan/20 text-biocyan border border-biocyan/40 shadow-[0_0_12px_rgba(79,209,197,0.25)]"
+                      : "text-slate-400 hover:bg-white/5 hover:text-slate-200 border border-transparent"
+                  }`}
+                >
+                  {translateRecipientRole(role, t)}
+                </button>
+              );
+            })}
+
+            {/* Always Last: Other ("Khác") */}
+            <button
+              type="button"
+              onClick={() => setSelectedRoleFilter("Khác")}
+              className={`whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-medium transition-all ${
+                selectedRoleFilter === "Khác"
+                  ? "bg-biocyan/20 text-biocyan border border-biocyan/40 shadow-[0_0_12px_rgba(79,209,197,0.25)]"
+                  : "text-slate-400 hover:bg-white/5 hover:text-slate-200 border border-transparent"
+              }`}
+            >
+              {t.role_other}
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* 3b. EMPTY OCEAN STATE NOTICE WHEN NO BOTTLES ARE DRIFTING */}
+      <AnimatePresence>
+        {isOceanLoaded && filteredBottles.length === 0 && (
+          <motion.div
+            key="empty-ocean-state"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.5 }}
+            className="pointer-events-none fixed inset-x-0 top-[54%] sm:top-1/2 z-10 flex -translate-y-1/2 flex-col items-center justify-center px-6 text-center"
+          >
+            <div className="flex max-w-md flex-col items-center rounded-3xl border border-white/10 bg-midnight/60 px-6 py-5 shadow-[0_0_45px_rgba(5,8,17,0.85)] backdrop-blur-md">
+              <img
+                src="/ocean-bottle-icon.png"
+                alt=""
+                className="mb-2.5 h-14 w-14 object-contain opacity-90 drop-shadow-[0_0_16px_rgba(79,209,197,0.45)]"
+              />
+              <p className="font-serif text-lg sm:text-xl font-medium tracking-wide text-slate-200">
+                {t.ocean_empty_title}
+              </p>
+              <p className="mt-1.5 text-xs sm:text-sm font-light text-slate-400">
+                {t.ocean_empty_subtitle}
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* 4. FLOATING BOTTOM CENTER CALL-TO-ACTION */}
       <div className="pointer-events-none fixed inset-x-0 bottom-6 sm:bottom-8 z-30 flex flex-col items-center gap-3 px-4">

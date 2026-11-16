@@ -92,5 +92,8 @@
   "rule_quota_message": "오늘은 충분히 귀를 기울였습니다. 마음을 편안히 쉬게 해주세요.",
   "rule_quota_close": "알겠습니다, 내일 밤에 만나요",
   "toast_bottle_cast": "당신의 유리병이 해류를 따라 흘러갑니다. 이제 다른 편지를 열어볼 수 있습니다.",
-  "toast_bottle_reported": "이 편지를 바다에서 숨겼습니다."
+  "toast_bottle_reported": "이 편지를 바다에서 숨겼습니다.",
+  "ocean_empty_title": "아직 밤바다에 띄워진 유리병이 없습니다",
+  "ocean_empty_subtitle": "가장 먼저 못다 한 진심을 파도 속에 띄워 보내세요",
+  "toast_no_other_bottles": "현재 바다에 떠 있는 다른 사람의 유리병이 없습니다."
 }
